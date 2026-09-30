@@ -232,3 +232,6 @@ changes are logged in [CHANGELOG.md](CHANGELOG.md).
 ## License
 
 MIT, see [LICENSE](LICENSE). Use it on your own networks.
+
+---
+maintained · verified 2026-09-30
