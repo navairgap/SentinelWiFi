@@ -235,3 +235,7 @@ MIT, see [LICENSE](LICENSE). Use it on your own networks.
 
 ---
 maintained · verified 2026-09-30
+
+## Hardware notes
+
+any rtl-sdr v3 or blog v4 sticks work; the cheaper nooelec nanos are fine for a fixed monitor but run hot in 24/7 duty. place the antenna high and away from your router — wifi cards drown in their own transmissions at close range.
