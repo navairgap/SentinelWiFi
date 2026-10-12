@@ -239,3 +239,7 @@ maintained · verified 2026-09-30
 ## Hardware notes
 
 any rtl-sdr v3 or blog v4 sticks work; the cheaper nooelec nanos are fine for a fixed monitor but run hot in 24/7 duty. place the antenna high and away from your router — wifi cards drown in their own transmissions at close range.
+
+## False positives
+
+deauth frames aren't always attacks: client roaming between APs, chatty IoT firmware, and mesh re-steering all look similar. alarm on sustained bursts from one source, not single frames.
