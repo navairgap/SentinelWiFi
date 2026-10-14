@@ -243,3 +243,7 @@ any rtl-sdr v3 or blog v4 sticks work; the cheaper nooelec nanos are fine for a 
 ## False positives
 
 deauth frames aren't always attacks: client roaming between APs, chatty IoT firmware, and mesh re-steering all look similar. alarm on sustained bursts from one source, not single frames.
+
+## Tuning
+
+the entropy threshold ships at 3.5 bits/char, tuned for quiet home networks; dorm and office airspace want 3.8–4.0 to absorb roaming noise. window length trades latency against false positives — 30s for alerting, 300s for logging.
