@@ -247,3 +247,7 @@ deauth frames aren't always attacks: client roaming between APs, chatty IoT firm
 ## Tuning
 
 the entropy threshold ships at 3.5 bits/char, tuned for quiet home networks; dorm and office airspace want 3.8–4.0 to absorb roaming noise. window length trades latency against false positives — 30s for alerting, 300s for logging.
+
+## Operations
+
+a systemd unit with `After=network-online.target` and a 10-second start delay beats every race with NetworkManager. logs go to journald; the `sentinel report` subcommand reads the last hour without grep.
