@@ -15,10 +15,9 @@ import sys
 
 
 def _escape_applescript(value: str) -> str:
-    # Keep interpolated values inside a single AppleScript string literal.
-    value = "".join(ch for ch in str(value) if ch >= " " and ch not in "\\x7f")
-    return value.replace("\\\\", "\\\\\\\\").replace('"', '\\\"')
-
+    # Strip control characters and escape AppleScript string delimiters.
+    value = "".join(ch for ch in str(value) if ord(ch) >= 32 and ord(ch) != 127)
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 def notify(title: str, message: str) -> bool:
     try:
