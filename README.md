@@ -251,3 +251,7 @@ the entropy threshold ships at 3.5 bits/char, tuned for quiet home networks; dor
 ## Operations
 
 a systemd unit with `After=network-online.target` and a 10-second start delay beats every race with NetworkManager. logs go to journald; the `sentinel report` subcommand reads the last hour without grep.
+
+## History
+
+started after a deauth attack on a home network during a crowded apartment evening — everyone's streaming died at once, and 'why' had no answer. the detector is the answer, permanently running.
