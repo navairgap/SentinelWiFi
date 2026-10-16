@@ -14,6 +14,12 @@ import subprocess
 import sys
 
 
+def _escape_applescript(value: str) -> str:
+    # Keep interpolated values inside a single AppleScript string literal.
+    value = "".join(ch for ch in str(value) if ch >= " " and ch not in "\\x7f")
+    return value.replace("\\\\", "\\\\\\\\").replace('"', '\\\"')
+
+
 def notify(title: str, message: str) -> bool:
     try:
         if sys.platform.startswith("linux") and shutil.which("notify-send"):
@@ -21,7 +27,9 @@ def notify(title: str, message: str) -> bool:
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
         if sys.platform == "darwin":
-            script = f'display notification "{message}" with title "{title}"'
+            safe_message = _escape_applescript(message)
+            safe_title = _escape_applescript(title)
+            script = f'display notification "{safe_message}" with title "{safe_title}"'
             subprocess.Popen(["osascript", "-e", script],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
