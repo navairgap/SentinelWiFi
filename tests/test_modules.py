@@ -90,3 +90,37 @@ class TestNeighParse(unittest.TestCase):
         text = "192.168.1.2 lladdr de:ad:be:ef:00:01 dev eth0 REACHABLE\n"
         self.assertEqual(_parse_neigh(text),
                          [("192.168.1.2", "DE:AD:BE:EF:00:01")])
+
+
+class TestArpScan(unittest.TestCase):
+    def test_returns_enriched_devices(self):
+        import sys
+        import types
+        from unittest.mock import patch
+        from sentinelwifi import lan_scan
+
+        class Packet:
+            def __truediv__(self, other):
+                return self
+
+        fake_scapy = types.ModuleType("scapy.all")
+        fake_scapy.Ether = lambda **kwargs: Packet()
+        fake_scapy.ARP = lambda **kwargs: Packet()
+        fake_scapy.srp = lambda *args, **kwargs: (
+            [(None, types.SimpleNamespace(psrc="192.168.1.1", hwsrc="AA:BB:CC:DD:EE:FF"))],
+            [],
+        )
+        fake_scapy_parent = types.ModuleType("scapy")
+        fake_scapy_parent.__path__ = []
+
+        with patch.dict(sys.modules, {"scapy": fake_scapy_parent, "scapy.all": fake_scapy}), \
+             patch.object(lan_scan, "local_network_info", return_value=("192.168.1.9", "192.168.1.1", "eth0")), \
+             patch.object(lan_scan, "self_mac", return_value="11:22:33:44:55:66"), \
+             patch.object(lan_scan.socket, "gethostbyaddr", return_value=("router.local", [], [])):
+            devices = lan_scan.arp_scan("192.168.1.0/24")
+
+        self.assertEqual(len(devices), 1)
+        self.assertEqual(devices[0].ip, "192.168.1.1")
+        self.assertTrue(devices[0].is_gateway)
+        self.assertFalse(devices[0].is_self)
+        self.assertEqual(devices[0].hostname, "router.local")
