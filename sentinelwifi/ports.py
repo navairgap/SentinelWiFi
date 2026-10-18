@@ -45,7 +45,8 @@ def grab_banner(ip: str, port: int, timeout: float) -> str:
             if port in (80, 8080, 8888):
                 s.sendall(b"HEAD / HTTP/1.0\r\nHost: x\r\n\r\n")
             data = s.recv(80)
-            return data.decode("utf-8", errors="replace").strip().splitlines()[0][:60]
+            lines = data.decode("utf-8", errors="replace").strip().splitlines()
+            return lines[0][:60] if lines else ""
     except OSError:
         return ""
 
