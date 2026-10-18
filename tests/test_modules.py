@@ -154,3 +154,53 @@ class TestServiceScanArguments(unittest.TestCase):
         from sentinelwifi.ports import scan_services
         with self.assertRaises(ValueError):
             scan_services(["192.168.1.10"], ports={70000: "invalid"})
+
+
+class TestConfigValidation(unittest.TestCase):
+    def test_invalid_values_fall_back_to_defaults(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "watch_interval": "fast",
+                    "port_scan_timeout": -1,
+                    "notify": "yes",
+                    "trusted_bssids": "AA:BB:CC:DD:EE:FF",
+                    "preferred_iface": 7,
+                    "port_scan_enabled": False,
+                }, f)
+            with patch.object(config_module, "CONFIG_FILE", path):
+                loaded = config_module.load_config()
+
+        self.assertEqual(loaded["watch_interval"], config_module.DEFAULTS["watch_interval"])
+        self.assertEqual(loaded["port_scan_timeout"], config_module.DEFAULTS["port_scan_timeout"])
+        self.assertFalse(loaded["notify"])
+        self.assertEqual(loaded["trusted_bssids"], [])
+        self.assertEqual(loaded["preferred_iface"], "")
+        self.assertFalse(loaded["port_scan_enabled"])
+
+    def test_valid_values_are_preserved(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w") as f:
+                json.dump({
+                    "watch_interval": 120,
+                    "port_scan_timeout": 1.25,
+                    "notify": True,
+                    "trusted_bssids": ["AA:BB:CC:DD:EE:FF"],
+                    "preferred_iface": "wlan0",
+                }, f)
+            with patch.object(config_module, "CONFIG_FILE", path):
+                loaded = config_module.load_config()
+
+        self.assertEqual(loaded["watch_interval"], 120)
+        self.assertEqual(loaded["port_scan_timeout"], 1.25)
+        self.assertTrue(loaded["notify"])
+        self.assertEqual(loaded["trusted_bssids"], ["AA:BB:CC:DD:EE:FF"])
+        self.assertEqual(loaded["preferred_iface"], "wlan0")
