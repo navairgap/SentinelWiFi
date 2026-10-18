@@ -219,3 +219,18 @@ class TestLocalNetworkSocketCleanup(unittest.TestCase):
 
         self.assertEqual(result, ("", "", ""))
         fake_socket.__exit__.assert_called_once()
+
+
+class TestDefaultGatewayParsing(unittest.TestCase):
+    def test_malformed_route_entries_are_skipped(self):
+        from unittest.mock import mock_open, patch
+        from sentinelwifi.lan_scan import _default_gateway
+
+        routes = (
+            "Iface Destination Gateway Flags\n"
+            "malformed\n"
+            "eth0 00000000 NOTHEX 0003\n"
+            "wlan0 00000000 0101A8C0 0003\n"
+        )
+        with patch("builtins.open", mock_open(read_data=routes)):
+            self.assertEqual(_default_gateway(), "192.168.1.1")
