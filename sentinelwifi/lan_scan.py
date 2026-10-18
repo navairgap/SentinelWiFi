@@ -186,8 +186,15 @@ def _parse_neigh(text: str) -> list[tuple[str, str]]:
         parts = line.split()
         if "lladdr" not in parts or "dev" not in parts:
             continue
+        mac_index = parts.index("lladdr") + 1
+        if mac_index >= len(parts):
+            continue
         ip = parts[0]
-        mac = parts[parts.index("lladdr") + 1].upper()
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        mac = parts[mac_index].upper()
         if re.match(r"^[0-9A-F]{2}(:[0-9A-F]{2}){5}$", mac):
             found.append((ip, mac))
     return found
