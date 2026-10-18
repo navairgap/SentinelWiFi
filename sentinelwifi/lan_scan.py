@@ -168,6 +168,15 @@ def arp_scan(subnet: str, timeout: int = 4) -> list[Device]:
             except Exception:
                 pass
 
+    for dev in devices.values():
+        dev.is_gateway = (dev.ip == gateway)
+        dev.is_self = (dev.ip == local_ip) or (my_mac and dev.mac == my_mac)
+        try:
+            dev.hostname = socket.gethostbyaddr(dev.ip)[0]
+        except (socket.herror, socket.gaierror, OSError):
+            dev.hostname = ""
+    return sorted(devices.values(), key=lambda d: ipaddress.ip_address(d.ip))
+
 
 def _parse_neigh(text: str) -> list[tuple[str, str]]:
     """Parse `ip neigh show` output -> [(ip, mac)]. Handles both
