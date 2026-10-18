@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 from .lan_scan import DATA_DIR
 
@@ -24,6 +25,26 @@ DEFAULTS: dict = {
     "preferred_iface": "",       # force an interface name
 }
 
+_MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+
+
+def _valid_value(key: str, value: object) -> bool:
+    """Reject malformed user settings instead of letting them fail at runtime."""
+    if key == "watch_interval":
+        return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 3600
+    if key == "port_scan_timeout":
+        return (isinstance(value, (int, float)) and not isinstance(value, bool)
+                and 0 < value <= 10)
+    if key in ("port_scan_enabled", "notify"):
+        return isinstance(value, bool)
+    if key == "trusted_bssids":
+        return (isinstance(value, list)
+                and all(isinstance(item, str) and _MAC_RE.fullmatch(item)
+                        for item in value))
+    if key == "preferred_iface":
+        return isinstance(value, str) and len(value) < 16 and "\0" not in value
+    return False
+
 
 def load_config() -> dict:
     cfg = dict(DEFAULTS)
@@ -31,7 +52,7 @@ def load_config() -> dict:
         with open(CONFIG_FILE) as f:
             user = json.load(f)
         if isinstance(user, dict):
-            cfg.update({k: v for k, v in user.items() if k in DEFAULTS})
+            cfg.update({k: v for k, v in user.items() if k in DEFAULTS and _valid_value(k, v)})
     except (OSError, json.JSONDecodeError, ValueError):
         pass
     # env override for CI/headless
@@ -43,7 +64,7 @@ def load_config() -> dict:
 def save_config(cfg: dict) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     merged = dict(DEFAULTS)
-    merged.update({k: v for k, v in cfg.items() if k in DEFAULTS})
+    merged.update({k: v for k, v in cfg.items() if k in DEFAULTS and _valid_value(k, v)})
     tmp = CONFIG_FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(merged, f, indent=2)
