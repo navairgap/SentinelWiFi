@@ -43,11 +43,10 @@ def local_network_info() -> tuple[str, str, str]:
     gateway = ""
     iface = ""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(2)
-        s.connect(("192.0.2.1", 80))  # TEST-NET-1: no traffic is actually sent
-        local_ip = s.getsockname()[0]
-        s.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(2)
+            s.connect(("192.0.2.1", 80))  # TEST-NET-1: no traffic is actually sent
+            local_ip = s.getsockname()[0]
     except OSError:
         pass
     if local_ip:
