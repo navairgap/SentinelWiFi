@@ -73,8 +73,16 @@ def _default_gateway() -> str:
             next(f)  # header
             for line in f:
                 fields = line.split()
-                if fields[1] == "00000000":  # destination 0.0.0.0
-                    return socket.inet_ntoa(bytes.fromhex(fields[2])[::-1])
+                if len(fields) < 3 or fields[1] != "00000000":
+                    continue
+                # Destination 0.0.0.0: malformed route rows should not abort discovery.
+                try:
+                    gateway_bytes = bytes.fromhex(fields[2])
+                    if len(gateway_bytes) != 4:
+                        continue
+                    return socket.inet_ntoa(gateway_bytes[::-1])
+                except (ValueError, OSError):
+                    continue
     except OSError:
         pass
     # Windows fallback: parse `ipconfig`
