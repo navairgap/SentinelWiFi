@@ -124,3 +124,17 @@ class TestArpScan(unittest.TestCase):
         self.assertTrue(devices[0].is_gateway)
         self.assertFalse(devices[0].is_self)
         self.assertEqual(devices[0].hostname, "router.local")
+
+
+class TestMalformedNeighbors(unittest.TestCase):
+    def test_missing_mac_and_invalid_ip_are_skipped(self):
+        from sentinelwifi.lan_scan import _parse_neigh
+        text = (
+            "192.168.1.1 dev eth0 lladdr REACHABLE\\n"
+            "not-an-ip dev eth0 lladdr 10:20:30:40:50:60 STALE\\n"
+            "192.168.1.2 dev eth0 lladdr de:ad:be:ef:00:01 REACHABLE\\n"
+        )
+        self.assertEqual(
+            _parse_neigh(text),
+            [("192.168.1.2", "DE:AD:BE:EF:00:01")],
+        )
