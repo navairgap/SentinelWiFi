@@ -65,7 +65,11 @@ def _probe(task) -> tuple[str, OpenPort] | None:
 def scan_services(ips: list[str], timeout: float = 0.5,
                   ports: dict[int, str] | None = None) -> dict[str, list[OpenPort]]:
     """Scan curated ports on the given (local-subnet) IPs. ip -> open ports."""
-    ports = ports or PORTS
+    if timeout <= 0:
+        raise ValueError("timeout must be greater than zero")
+    ports = PORTS if ports is None else ports
+    if any(not isinstance(p, int) or p < 1 or p > 65535 for p in ports):
+        raise ValueError("ports must be integers from 1 through 65535")
     tasks = [(ip, p, svc, timeout) for ip in ips for p, svc in ports.items()]
     results: dict[str, list[OpenPort]] = {}
     if not tasks:
