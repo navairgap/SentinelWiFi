@@ -204,3 +204,18 @@ class TestConfigValidation(unittest.TestCase):
         self.assertTrue(loaded["notify"])
         self.assertEqual(loaded["trusted_bssids"], ["AA:BB:CC:DD:EE:FF"])
         self.assertEqual(loaded["preferred_iface"], "wlan0")
+
+
+class TestLocalNetworkSocketCleanup(unittest.TestCase):
+    def test_socket_closes_when_connect_fails(self):
+        from unittest.mock import patch
+        from sentinelwifi import lan_scan
+
+        fake_socket = unittest.mock.MagicMock()
+        fake_socket.__enter__.return_value = fake_socket
+        fake_socket.connect.side_effect = OSError("no network")
+        with patch.object(lan_scan.socket, "socket", return_value=fake_socket):
+            result = lan_scan.local_network_info()
+
+        self.assertEqual(result, ("", "", ""))
+        fake_socket.__exit__.assert_called_once()
