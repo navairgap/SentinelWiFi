@@ -138,3 +138,19 @@ class TestMalformedNeighbors(unittest.TestCase):
             _parse_neigh(text),
             [("192.168.1.2", "DE:AD:BE:EF:00:01")],
         )
+
+
+class TestServiceScanArguments(unittest.TestCase):
+    def test_empty_port_selection_scans_nothing(self):
+        from sentinelwifi.ports import scan_services
+        self.assertEqual(scan_services(["192.168.1.10"], ports={}), {})
+
+    def test_nonpositive_timeout_is_rejected(self):
+        from sentinelwifi.ports import scan_services
+        with self.assertRaises(ValueError):
+            scan_services(["192.168.1.10"], timeout=0)
+
+    def test_invalid_port_is_rejected(self):
+        from sentinelwifi.ports import scan_services
+        with self.assertRaises(ValueError):
+            scan_services(["192.168.1.10"], ports={70000: "invalid"})
