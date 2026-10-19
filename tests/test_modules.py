@@ -71,6 +71,20 @@ class TestReportAndDemo(unittest.TestCase):
         self.assertIn("grade", html)
 
 
+class TestAppleScriptEscaping(unittest.TestCase):
+    def test_notification_text_cannot_break_out_of_string(self):
+        from sentinelwifi.notify import _escape_applescript
+
+        self.assertEqual(
+            _escape_applescript('hello "there"\\today'),
+            'hello \\"there\\"\\\\today',
+        )
+
+    def test_notification_text_removes_control_characters(self):
+        from sentinelwifi.notify import _escape_applescript
+
+        self.assertEqual(_escape_applescript("safe\x00text\x7f"), "safetext")
+
 if __name__ == "__main__":
     unittest.main()
 
