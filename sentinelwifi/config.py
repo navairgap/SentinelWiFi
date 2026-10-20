@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 
 from .lan_scan import DATA_DIR
 
@@ -62,10 +63,24 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict) -> None:
-    os.makedirs(DATA_DIR, exist_ok=True)
+    directory = os.path.dirname(CONFIG_FILE) or "."
+    os.makedirs(directory, exist_ok=True)
     merged = dict(DEFAULTS)
     merged.update({k: v for k, v in cfg.items() if k in DEFAULTS and _valid_value(k, v)})
-    tmp = CONFIG_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(merged, f, indent=2)
-    os.replace(tmp, CONFIG_FILE)
+
+    # A unique same-directory temp file avoids collisions between concurrent
+    # writers; fsync before replace so readers never see a partial JSON file.
+    fd, tmp = tempfile.mkstemp(prefix=".sentinelwifi-config-", suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(merged, f, indent=2)
+            f.write("\\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, CONFIG_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise

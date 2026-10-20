@@ -170,6 +170,22 @@ class TestServiceScanArguments(unittest.TestCase):
             scan_services(["192.168.1.10"], ports={70000: "invalid"})
 
 
+class TestConfigSave(unittest.TestCase):
+    def test_save_writes_complete_valid_json_and_leaves_no_temp_file(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with patch.object(config_module, "CONFIG_FILE", path):
+                config_module.save_config({"watch_interval": 120, "notify": True})
+            with open(path, encoding="utf-8") as f:
+                saved = json.load(f)
+            self.assertEqual(saved["watch_interval"], 120)
+            self.assertTrue(saved["notify"])
+            self.assertEqual(os.listdir(td), ["config.json"])
+
+
 class TestConfigValidation(unittest.TestCase):
     def test_invalid_values_fall_back_to_defaults(self):
         from unittest.mock import patch
