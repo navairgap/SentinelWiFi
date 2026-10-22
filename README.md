@@ -255,3 +255,8 @@ a systemd unit with `After=network-online.target` and a 10-second start delay be
 ## History
 
 started after a deauth attack on a home network during a crowded apartment evening — everyone's streaming died at once, and 'why' had no answer. the detector is the answer, permanently running.
+
+
+## Safe test scope
+
+Use synthetic fixtures and mocked command output in CI. Tests should not require root or contact external networks by default. Reports should escape untrusted hostnames and avoid including credentials or other sensitive local data.
