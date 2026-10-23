@@ -66,7 +66,8 @@ class TestReportAndDemo(unittest.TestCase):
         self.assertGreater(len(payload["score"]["findings"]), 0)
         with tempfile.TemporaryDirectory() as td:
             path = write_html_report(data, os.path.join(td, "r.html"))
-            html = open(path).read()
+            with open(path, encoding="utf-8") as f:
+                html = f.read()
         self.assertIn("Findings", html)
         self.assertIn("grade", html)
 
