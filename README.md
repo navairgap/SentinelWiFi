@@ -260,3 +260,8 @@ started after a deauth attack on a home network during a crowded apartment eveni
 ## Safe test scope
 
 Use synthetic fixtures and mocked command output in CI. Tests should not require root or contact external networks by default. Reports should escape untrusted hostnames and avoid including credentials or other sensitive local data.
+
+
+## Maintenance and verification notes
+
+Document test expectations for absent interfaces, permission errors, malformed addresses, unavailable routers, escaped SSIDs, and synthetic reports. Unit tests should not require root or access external networks.
