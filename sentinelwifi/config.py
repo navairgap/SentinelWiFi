@@ -74,7 +74,7 @@ def save_config(cfg: dict) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(merged, f, indent=2)
-            f.write("\\n")
+            f.write("\n")
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, CONFIG_FILE)
