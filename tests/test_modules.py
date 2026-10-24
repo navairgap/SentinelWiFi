@@ -172,6 +172,22 @@ class TestServiceScanArguments(unittest.TestCase):
 
 
 class TestConfigSave(unittest.TestCase):
+    def test_failed_replace_preserves_existing_config_and_cleans_temp(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as original:
+                json.dump({"watch_interval": 90}, original)
+            with patch.object(config_module, "CONFIG_FILE", path):
+                with patch.object(config_module.os, "replace", side_effect=OSError("replace failed")):
+                    with self.assertRaises(OSError):
+                        config_module.save_config({"watch_interval": 120})
+            with open(path, encoding="utf-8") as original:
+                self.assertEqual(json.load(original), {"watch_interval": 90})
+            self.assertEqual(os.listdir(td), ["config.json"])
+
     def test_save_writes_complete_valid_json_and_leaves_no_temp_file(self):
         from unittest.mock import patch
         from sentinelwifi import config as config_module
