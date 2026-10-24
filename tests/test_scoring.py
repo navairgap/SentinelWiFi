@@ -112,6 +112,19 @@ class TestGradeBands(unittest.TestCase):
             [check_wifi_encryption("Open"),
              check_unknown_devices(9)]).score, 30)
 
+    def test_score_never_goes_below_zero(self):
+        findings = [
+            check_wifi_encryption("Open"),
+            check_wifi_encryption("WEP"),
+            check_http_admin("http", "192.0.2.1"),
+            check_unknown_devices(10),
+            check_evil_twin("multiple matching access points"),
+            check_exposed_services(["telnet", "ftp", "vnc"]),
+        ]
+        result = compute_grade([finding for finding in findings if finding])
+        self.assertEqual(result.score, 0)
+        self.assertEqual(result.grade, "F")
+
 
 if __name__ == "__main__":
     unittest.main()
