@@ -204,6 +204,19 @@ class TestConfigSave(unittest.TestCase):
 
 
 class TestConfigValidation(unittest.TestCase):
+    def test_malformed_json_uses_default_configuration(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write('{"watch_interval": ')
+            with patch.object(config_module, "CONFIG_FILE", path):
+                loaded = config_module.load_config()
+
+        self.assertEqual(loaded, config_module.DEFAULTS)
+
     def test_unknown_configuration_keys_are_ignored(self):
         from unittest.mock import patch
         from sentinelwifi import config as config_module
