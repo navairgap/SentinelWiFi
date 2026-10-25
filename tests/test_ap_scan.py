@@ -182,3 +182,23 @@ BSS 11:22:33:44:55:66(on wlan0)
         self.assertEqual(check_pmf("capable").penalty, 0)
         self.assertIsNone(check_pmf("required"))
         self.assertIsNone(check_pmf(""))
+
+
+class TestManagedModeScan(unittest.TestCase):
+    def test_parses_ssid_containing_colons(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from sentinelwifi.ap_scan import managed_mode_scan
+
+        output = (
+            "Home:Lab:AA:BB:CC:DD:EE:FF:6:80:WPA2\n"
+        )
+        with patch("sentinelwifi.ap_scan.shutil.which", side_effect=lambda name: "/usr/bin/nmcli" if name == "nmcli" else None):
+            with patch("sentinelwifi.ap_scan.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout=output)):
+                aps = managed_mode_scan()
+
+        self.assertEqual(len(aps), 1)
+        self.assertEqual(aps[0].ssid, "Home:Lab")
+        self.assertEqual(aps[0].bssid, "AA:BB:CC:DD:EE:FF")
+        self.assertEqual(aps[0].channel, 6)
+        self.assertEqual(aps[0].encryption, "WPA2")
