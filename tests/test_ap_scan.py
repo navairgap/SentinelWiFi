@@ -202,3 +202,19 @@ class TestManagedModeScan(unittest.TestCase):
         self.assertEqual(aps[0].bssid, "AA:BB:CC:DD:EE:FF")
         self.assertEqual(aps[0].channel, 6)
         self.assertEqual(aps[0].encryption, "WPA2")
+
+
+class TestSecurityNormalization(unittest.TestCase):
+    def test_normalizes_common_security_labels(self):
+        from sentinelwifi.ap_scan import _normalize_security
+
+        cases = {
+            "": "Open",
+            "--": "Open",
+            "WPA2-PSK": "WPA2",
+            "WPA3-SAE": "WPA3",
+            "WEP": "WEP",
+        }
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(_normalize_security(value), expected)
