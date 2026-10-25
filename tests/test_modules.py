@@ -256,6 +256,20 @@ class TestConfigValidation(unittest.TestCase):
         self.assertEqual(loaded["preferred_iface"], "")
         self.assertFalse(loaded["port_scan_enabled"])
 
+    def test_no_notify_environment_override_disables_notifications(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"notify": True}, f)
+            with patch.object(config_module, "CONFIG_FILE", path):
+                with patch.dict("os.environ", {"SENTINELWIFI_NO_NOTIFY": "1"}):
+                    loaded = config_module.load_config()
+
+        self.assertFalse(loaded["notify"])
+
     def test_valid_values_are_preserved(self):
         from unittest.mock import patch
         from sentinelwifi import config as config_module
