@@ -188,6 +188,25 @@ class TestConfigSave(unittest.TestCase):
                 self.assertEqual(json.load(original), {"watch_interval": 90})
             self.assertEqual(os.listdir(td), ["config.json"])
 
+    def test_save_filters_invalid_values_to_defaults(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with patch.object(config_module, "CONFIG_FILE", path):
+                config_module.save_config({
+                    "watch_interval": -1,
+                    "notify": "yes",
+                    "preferred_iface": "wlan0",
+                })
+            with open(path, encoding="utf-8") as f:
+                saved = json.load(f)
+
+        self.assertEqual(saved["watch_interval"], config_module.DEFAULTS["watch_interval"])
+        self.assertFalse(saved["notify"])
+        self.assertEqual(saved["preferred_iface"], "wlan0")
+
     def test_save_writes_complete_valid_json_and_leaves_no_temp_file(self):
         from unittest.mock import patch
         from sentinelwifi import config as config_module
