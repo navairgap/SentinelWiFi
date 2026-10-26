@@ -44,6 +44,14 @@ class TestEvilTwin(unittest.TestCase):
                          [r.kind for r in analyze_environment(aps, cur)])
 
 
+    def test_duplicate_records_for_one_bssid_do_not_flag_twin(self):
+        aps = [_ap("Home", "AA:BB:CC:DD:EE:01", 6),
+               _ap("Home", "AA:BB:CC:DD:EE:01", 6)]
+        cur = {"ssid": "Home", "bssid": "AA:BB:CC:DD:EE:01", "channel": 6}
+        kinds = [finding.kind for finding in analyze_environment(aps, cur)]
+        self.assertNotIn("evil_twin", kinds)
+
+
 class TestCongestion(unittest.TestCase):
     def test_24ghz_overlap_counts_neighbors(self):
         # Me on ch6; 3 APs on ch6, 2 on overlapping ch4, ch9 (±4 overlap)
