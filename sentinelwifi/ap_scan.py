@@ -437,7 +437,8 @@ def analyze_environment(aps: list[AccessPoint], current: dict,
         by_ssid.setdefault(ap.ssid, []).append(ap)
 
     my_ssid = current.get("ssid", "")
-    trusted = trusted or frozenset()
+    # Config values may be stored in lowercase; scan results are uppercase.
+    trusted = frozenset(bssid.upper() for bssid in (trusted or ()))
 
     # Evil twin: same SSID, 2+ distinct BSSIDs (minus ones you told us you own)
     my_chan = current.get("channel", 0)
