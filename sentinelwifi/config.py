@@ -50,7 +50,7 @@ def _valid_value(key: str, value: object) -> bool:
 def load_config() -> dict:
     cfg = dict(DEFAULTS)
     try:
-        with open(CONFIG_FILE) as f:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
             user = json.load(f)
         if isinstance(user, dict):
             cfg.update({k: v for k, v in user.items() if k in DEFAULTS and _valid_value(k, v)})
