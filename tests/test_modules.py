@@ -107,6 +107,21 @@ class TestNeighParse(unittest.TestCase):
                          [("192.168.1.2", "DE:AD:BE:EF:00:01")])
 
 
+class TestConfigUtf8(unittest.TestCase):
+    def test_loads_utf8_configuration_values(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write('{"preferred_iface": "wlan-é"}')
+            with patch.object(config_module, "CONFIG_FILE", path):
+                loaded = config_module.load_config()
+
+        self.assertEqual(loaded["preferred_iface"], "wlan-é")
+
+
 class TestArpScan(unittest.TestCase):
     def test_returns_enriched_devices(self):
         import sys
