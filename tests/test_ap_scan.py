@@ -27,6 +27,15 @@ class TestEvilTwin(unittest.TestCase):
                                   trusted=frozenset({"AA:BB:CC:DD:EE:02"}))
         self.assertNotIn("evil_twin", [r.kind for r in out])
 
+    def test_trusted_bssid_comparison_is_case_insensitive(self):
+        aps = [_ap("Home", "AA:BB:CC:DD:EE:01", 6),
+               _ap("Home", "AA:BB:CC:DD:EE:02", 11)]
+        cur = {"ssid": "Home", "bssid": "AA:BB:CC:DD:EE:01", "channel": 6}
+        out = analyze_environment(
+            aps, cur, trusted=frozenset({"aa:bb:cc:dd:ee:02"})
+        )
+        self.assertNotIn("evil_twin", [r.kind for r in out])
+
     def test_single_bssid_clean(self):
         aps = [_ap("Home", "AA:BB:CC:DD:EE:01", 6),
                _ap("Other", "11:22:33:44:55:66", 1)]
