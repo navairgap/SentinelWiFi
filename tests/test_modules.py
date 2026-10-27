@@ -121,6 +121,21 @@ class TestConfigUtf8(unittest.TestCase):
 
         self.assertEqual(loaded["preferred_iface"], "wlan-é")
 
+    def test_invalid_utf8_configuration_falls_back_to_defaults(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "wb") as f:
+                f.write(b'{"preferred_iface": "wlan-\\xff"}')
+            with patch.object(config_module, "CONFIG_FILE", path):
+                loaded = config_module.load_config()
+
+        self.assertEqual(
+            loaded["preferred_iface"], config_module.DEFAULTS["preferred_iface"]
+        )
+
 
 class TestArpScan(unittest.TestCase):
     def test_returns_enriched_devices(self):
