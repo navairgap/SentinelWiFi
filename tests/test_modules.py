@@ -137,6 +137,23 @@ class TestConfigUtf8(unittest.TestCase):
         )
 
 
+class TestConfigDirectoryFallback(unittest.TestCase):
+    def test_directory_at_config_path_uses_defaults(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(config_module, "CONFIG_FILE", td):
+                loaded = config_module.load_config()
+
+        self.assertEqual(
+            loaded["watch_interval"], config_module.DEFAULTS["watch_interval"]
+        )
+        self.assertEqual(
+            loaded["preferred_iface"], config_module.DEFAULTS["preferred_iface"]
+        )
+
+
 class TestArpScan(unittest.TestCase):
     def test_returns_enriched_devices(self):
         import sys
