@@ -360,6 +360,26 @@ class TestConfigValidation(unittest.TestCase):
         self.assertEqual(loaded["preferred_iface"], "wlan0")
 
 
+class TestConfigBooleanNumbers(unittest.TestCase):
+    def test_boolean_numbers_are_not_accepted_as_numeric_settings(self):
+        from unittest.mock import patch
+        from sentinelwifi import config as config_module
+
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"watch_interval": True, "port_scan_timeout": False}, f)
+            with patch.object(config_module, "CONFIG_FILE", path):
+                loaded = config_module.load_config()
+
+        self.assertEqual(
+            loaded["watch_interval"], config_module.DEFAULTS["watch_interval"]
+        )
+        self.assertEqual(
+            loaded["port_scan_timeout"], config_module.DEFAULTS["port_scan_timeout"]
+        )
+
+
 class TestLocalNetworkSocketCleanup(unittest.TestCase):
     def test_socket_closes_when_connect_fails(self):
         from unittest.mock import patch
