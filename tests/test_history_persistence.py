@@ -51,6 +51,42 @@ class TestHistoryPersistence(unittest.TestCase):
                     {"runs": 0, "aps": {}, "devices": {}},
                 )
 
+    def test_failed_atomic_replace_preserves_snapshot_and_cleans_temp_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "history.json")
+            with patch.object(history, "HISTORY_FILE", path), \
+                 patch.object(history, "DATA_DIR", td):
+                history.update([], [])
+                with open(path, encoding="utf-8") as stream:
+                    original = stream.read()
+
+                with patch.object(history.os, "replace", side_effect=OSError("replace failed")):
+                    with self.assertRaisesRegex(OSError, "replace failed"):
+                        history.update([], [])
+
+                with open(path, encoding="utf-8") as stream:
+                    self.assertEqual(stream.read(), original)
+                self.assertEqual(os.listdir(td), ["history.json"])
+
+    def test_history_with_invalid_field_types_resets_to_empty_state(self):
+        invalid_payloads = [
+            "[]",
+            '{"runs": true, "aps": {}, "devices": {}}',
+            '{"runs": 2, "aps": [], "devices": {}}',
+            '{"runs": 2, "aps": {}, "devices": {"aa:bb": 7}}',
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "history.json")
+            with patch.object(history, "HISTORY_FILE", path):
+                for payload in invalid_payloads:
+                    with self.subTest(payload=payload):
+                        with open(path, "w", encoding="utf-8") as stream:
+                            stream.write(payload)
+                        self.assertEqual(
+                            history._load(),
+                            {"runs": 0, "aps": {}, "devices": {}},
+                        )
+
 
 if __name__ == "__main__":
     unittest.main()
