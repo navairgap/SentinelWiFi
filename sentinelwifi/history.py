@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import time
 from dataclasses import dataclass, field
 
@@ -42,10 +43,24 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = HISTORY_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f, indent=2)
-    os.replace(tmp, HISTORY_FILE)
+    fd, tmp = tempfile.mkstemp(
+        prefix=".sentinelwifi-history-",
+        suffix=".tmp",
+        dir=os.path.dirname(HISTORY_FILE) or ".",
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(data, stream, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, HISTORY_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def update(aps: list[AccessPoint], devices: list[Device]) -> HistoryDiff:
