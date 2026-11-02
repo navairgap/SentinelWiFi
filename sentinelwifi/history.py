@@ -32,10 +32,25 @@ class HistoryDiff:
 
 def _load() -> dict:
     try:
-        with open(HISTORY_FILE) as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            return data
+        with open(HISTORY_FILE, encoding="utf-8") as stream:
+            data = json.load(stream)
+        if not isinstance(data, dict):
+            return {"runs": 0, "aps": {}, "devices": {}}
+
+        runs = data.get("runs", 0)
+        aps = data.get("aps", {})
+        devices = data.get("devices", {})
+        valid_runs = isinstance(runs, int) and not isinstance(runs, bool) and runs >= 0
+        valid_aps = isinstance(aps, dict) and all(
+            isinstance(mac, str) and isinstance(ssid, str)
+            for mac, ssid in aps.items()
+        )
+        valid_devices = isinstance(devices, dict) and all(
+            isinstance(mac, str) and isinstance(ip, str)
+            for mac, ip in devices.items()
+        )
+        if valid_runs and valid_aps and valid_devices:
+            return {**data, "runs": runs, "aps": aps, "devices": devices}
     except (OSError, json.JSONDecodeError, ValueError):
         pass
     return {"runs": 0, "aps": {}, "devices": {}}
