@@ -11,6 +11,7 @@ my devices exposing to anyone on my WiFi?"
 
 from __future__ import annotations
 
+import math
 import socket
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -65,10 +66,12 @@ def _probe(task) -> tuple[str, OpenPort] | None:
 def scan_services(ips: list[str], timeout: float = 0.5,
                   ports: dict[int, str] | None = None) -> dict[str, list[OpenPort]]:
     """Scan curated ports on the given (local-subnet) IPs. ip -> open ports."""
-    if timeout <= 0:
-        raise ValueError("timeout must be greater than zero")
+    if (not isinstance(timeout, (int, float)) or isinstance(timeout, bool)
+            or not math.isfinite(timeout) or timeout <= 0):
+        raise ValueError("timeout must be a finite number greater than zero")
     ports = PORTS if ports is None else ports
-    if any(not isinstance(p, int) or p < 1 or p > 65535 for p in ports):
+    if any(isinstance(p, bool) or not isinstance(p, int) or p < 1 or p > 65535
+           for p in ports):
         raise ValueError("ports must be integers from 1 through 65535")
     tasks = [(ip, p, svc, timeout) for ip in ips for p, svc in ports.items()]
     results: dict[str, list[OpenPort]] = {}
