@@ -427,3 +427,32 @@ class TestServiceScanStrictArgumentValidation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHtmlHistoryRendering(unittest.TestCase):
+    def test_history_changes_are_rendered_and_escaped(self):
+        from types import SimpleNamespace
+        from sentinelwifi.report import ReportData, write_html_report
+
+        history = SimpleNamespace(
+            runs=3,
+            new_aps=[SimpleNamespace(ssid="<script>alert(1)</script>")],
+            new_devices=[SimpleNamespace(ip="192.168.1.20")],
+            gone_devices=["AA:BB:CC:DD:EE:FF"],
+        )
+        data = ReportData(history=history)
+        with tempfile.TemporaryDirectory() as td:
+            path = write_html_report(data, os.path.join(td, "history.html"))
+            with open(path, encoding="utf-8") as stream:
+                rendered = stream.read()
+
+        self.assertIn("Since last run", rendered)
+        self.assertIn("Run #3", rendered)
+        self.assertIn("192.168.1.20", rendered)
+        self.assertIn("AA:BB:CC:DD:EE:FF", rendered)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered)
+        self.assertNotIn("<script>alert(1)</script>", rendered)
+
+
+if __name__ == "__main__":
+    unittest.main()
