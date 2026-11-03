@@ -95,5 +95,11 @@ def risk_summary(services: dict[str, list[OpenPort]]) -> list[str]:
     for ip, ops in services.items():
         for op in ops:
             if op.port in SEV:
-                notes.append((SEV[op.port], f"{ip} exposes {op.service} on port {op.port}"))
-    return [n for _s, n in sorted(notes, key=lambda t: -t[0])]
+                notes.append((
+                    SEV[op.port],
+                    ip,
+                    op.port,
+                    f"{ip} exposes {op.service} on port {op.port}",
+                ))
+    return [note for _severity, _ip, _port, note in
+            sorted(notes, key=lambda item: (-item[0], item[1], item[2]))]
