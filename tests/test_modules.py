@@ -408,3 +408,22 @@ class TestDefaultGatewayParsing(unittest.TestCase):
         )
         with patch("builtins.open", mock_open(read_data=routes)):
             self.assertEqual(_default_gateway(), "192.168.1.1")
+
+
+class TestServiceScanStrictArgumentValidation(unittest.TestCase):
+    def test_timeout_rejects_boolean_nonfinite_and_non_numeric_values(self):
+        from sentinelwifi.ports import scan_services
+
+        for timeout in (True, False, float("inf"), float("nan"), "1"):
+            with self.subTest(timeout=timeout), self.assertRaises(ValueError):
+                scan_services(["192.168.1.10"], timeout=timeout)
+
+    def test_boolean_port_key_is_rejected(self):
+        from sentinelwifi.ports import scan_services
+
+        with self.assertRaises(ValueError):
+            scan_services(["192.168.1.10"], ports={True: "invalid"})
+
+
+if __name__ == "__main__":
+    unittest.main()
