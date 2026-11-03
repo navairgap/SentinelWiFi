@@ -346,6 +346,6 @@ def write_html_report(data: ReportData, path: str) -> str:
                    + "".join(f"<li>{_esc(n)}</li>" for n in data.limitations)
                    + "</ul>")
     out.append("</body></html>")
-    with open(path, "w", encoding="utf-8", newline="\\n") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(out))
     return path
