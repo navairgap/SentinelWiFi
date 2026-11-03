@@ -326,11 +326,26 @@ def write_html_report(data: ReportData, path: str) -> str:
                 f"<span class='fix'><b>Fix:</b> {_esc(f.fix)}</span></p>")
         out.append("<h2>Findings &amp; fixes</h2>" + "".join(items))
 
+    if data.history is not None and data.history.runs > 1:
+        history = data.history
+        out.append(f"<h2>Since last run</h2><p>Run #{history.runs}</p>")
+        if history.new_aps:
+            names = ", ".join(_esc(ap.ssid) for ap in history.new_aps)
+            out.append(f"<p>New access points: {names}</p>")
+        if history.new_devices:
+            addresses = ", ".join(_esc(device.ip) for device in history.new_devices)
+            out.append(f"<p>New devices: {addresses}</p>")
+        if history.gone_devices:
+            addresses = ", ".join(_esc(mac) for mac in history.gone_devices)
+            out.append(f"<p>Devices no longer seen: {addresses}</p>")
+        if not (history.new_aps or history.new_devices or history.gone_devices):
+            out.append("<p>No changes detected.</p>")
+
     if data.limitations:
         out.append("<h2>Platform notes</h2><ul>"
                    + "".join(f"<li>{_esc(n)}</li>" for n in data.limitations)
                    + "</ul>")
     out.append("</body></html>")
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8", newline="\\n") as fh:
         fh.write("\n".join(out))
     return path
