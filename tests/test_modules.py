@@ -456,3 +456,25 @@ class TestHtmlHistoryRendering(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRiskSummaryOrdering(unittest.TestCase):
+    def test_equal_severity_findings_are_sorted_by_ip_and_port(self):
+        from sentinelwifi.ports import risk_summary
+
+        services = {
+            "192.168.1.20": [OpenPort(23, "Telnet"), OpenPort(21, "FTP")],
+            "192.168.1.10": [OpenPort(23, "Telnet")],
+        }
+        self.assertEqual(
+            risk_summary(services),
+            [
+                "192.168.1.10 exposes Telnet on port 23",
+                "192.168.1.20 exposes FTP on port 21",
+                "192.168.1.20 exposes Telnet on port 23",
+            ],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
