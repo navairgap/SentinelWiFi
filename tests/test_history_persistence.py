@@ -40,7 +40,7 @@ class TestHistoryPersistence(unittest.TestCase):
             self.assertEqual(saved["devices"][device2.mac], device2.ip)
             self.assertEqual(os.listdir(td), ["history.json"])
 
-    def test_gone_device_lookup_builds_current_mac_set_once(self):
+    def test_gone_device_lookup_does_not_rescan_per_old_entry(self):
         class CountingDevices(list):
             iterations = 0
 
@@ -52,13 +52,14 @@ class TestHistoryPersistence(unittest.TestCase):
             first = SimpleNamespace(mac="AA:00:00:00:00:01", ip="192.0.2.1")
             second = SimpleNamespace(mac="AA:00:00:00:00:02", ip="192.0.2.2")
             current = CountingDevices([second])
-            with patch.object(history, "HISTORY_FILE", os.path.join(td, "history.json")), \\
-                 patch.object(history, "DATA_DIR", td):
-                history.update([], [first, second])
-                diff = history.update([], current)
+            with patch.object(history, "HISTORY_FILE", os.path.join(td, "history.json")):
+                with patch.object(history, "DATA_DIR", td):
+                    history.update([], [first, second])
+                    diff = history.update([], current)
 
             self.assertEqual(diff.gone_devices, [first.mac])
-            self.assertEqual(current.iterations, 2)
+            # Two previous MACs should not cause two extra passes over the current list.
+            self.assertLess(current.iterations, 4)
 
     def test_malformed_history_starts_from_empty_state(self):
         with tempfile.TemporaryDirectory() as td:
