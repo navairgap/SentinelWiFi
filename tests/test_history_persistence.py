@@ -40,6 +40,26 @@ class TestHistoryPersistence(unittest.TestCase):
             self.assertEqual(saved["devices"][device2.mac], device2.ip)
             self.assertEqual(os.listdir(td), ["history.json"])
 
+    def test_gone_device_lookup_builds_current_mac_set_once(self):
+        class CountingDevices(list):
+            iterations = 0
+
+            def __iter__(self):
+                self.iterations += 1
+                return super().__iter__()
+
+        with tempfile.TemporaryDirectory() as td:
+            first = SimpleNamespace(mac="AA:00:00:00:00:01", ip="192.0.2.1")
+            second = SimpleNamespace(mac="AA:00:00:00:00:02", ip="192.0.2.2")
+            current = CountingDevices([second])
+            with patch.object(history, "HISTORY_FILE", os.path.join(td, "history.json")), \\
+                 patch.object(history, "DATA_DIR", td):
+                history.update([], [first, second])
+                diff = history.update([], current)
+
+            self.assertEqual(diff.gone_devices, [first.mac])
+            self.assertEqual(current.iterations, 2)
+
     def test_malformed_history_starts_from_empty_state(self):
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "history.json")
