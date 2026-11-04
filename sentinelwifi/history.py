@@ -95,8 +95,8 @@ def update(aps: list[AccessPoint], devices: list[Device]) -> HistoryDiff:
         diff.new_devices = []
     else:
         diff.new_devices = [d for d in devices if d.mac not in old_devs]
-    diff.gone_devices = [mac for mac in old_devs
-                         if mac not in {d.mac for d in devices}]
+    current_device_macs = {d.mac for d in devices}
+    diff.gone_devices = [mac for mac in old_devs if mac not in current_device_macs]
 
     data["runs"] = diff.runs
     data["last_run"] = time.time()
