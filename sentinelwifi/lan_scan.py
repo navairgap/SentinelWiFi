@@ -16,6 +16,7 @@ import os
 import re
 import socket
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 
@@ -206,15 +207,6 @@ def _parse_neigh(text: str) -> list[tuple[str, str]]:
             found.append((ip, mac))
     return found
 
-    for dev in devices.values():
-        dev.is_gateway = (dev.ip == gateway)
-        dev.is_self = (dev.ip == local_ip) or (my_mac and dev.mac == my_mac)
-        try:
-            dev.hostname = socket.gethostbyaddr(dev.ip)[0]
-        except (socket.herror, socket.gaierror, OSError):
-            dev.hostname = ""
-    return sorted(devices.values(), key=lambda d: ipaddress.ip_address(d.ip))
-
 
 def mark_new_devices(devices: list[Device]) -> None:
     """Compare against ~/.sentinelwifi/known_devices.json; flag newcomers."""
@@ -228,19 +220,44 @@ def mark_new_devices(devices: list[Device]) -> None:
 
 def _load_known() -> set[str]:
     try:
-        with open(KNOWN_DEVICES_FILE) as f:
+        with open(KNOWN_DEVICES_FILE, encoding="utf-8") as f:
             data = json.load(f)
-        return set(data.get("macs", []))
     except (OSError, json.JSONDecodeError, ValueError):
         return set()
 
+    if not isinstance(data, dict):
+        return set()
+    macs = data.get("macs", [])
+    if not isinstance(macs, list):
+        return set()
+    return {
+        mac.upper()
+        for mac in macs
+        if isinstance(mac, str)
+        and re.fullmatch(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}", mac)
+    }
+
 
 def _save_known(macs: set[str]) -> None:
-    os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = KNOWN_DEVICES_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump({"macs": sorted(macs)}, f, indent=2)
-    os.replace(tmp, KNOWN_DEVICES_FILE)  # atomic update
+    os.makedirs(DATA_DIR, exist_ok=True, mode=0o700)
+    fd, tmp = tempfile.mkstemp(
+        prefix=".known-devices-",
+        suffix=".tmp",
+        dir=DATA_DIR,
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"macs": sorted(macs)}, f, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, KNOWN_DEVICES_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def announce_new_devices(previous: set[str], devices: list[Device]) -> list[Device]:
