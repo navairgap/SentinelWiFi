@@ -57,7 +57,8 @@ def load_config() -> dict:
     except (OSError, json.JSONDecodeError, ValueError):
         pass
     # env override for CI/headless
-    if os.environ.get("SENTINELWIFI_NO_NOTIFY"):
+    no_notify = os.environ.get("SENTINELWIFI_NO_NOTIFY", "").strip().lower()
+    if no_notify in {"1", "true", "yes", "on"}:
         cfg["notify"] = False
     return cfg
 
