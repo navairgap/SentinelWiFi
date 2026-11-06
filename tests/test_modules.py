@@ -86,9 +86,6 @@ class TestAppleScriptEscaping(unittest.TestCase):
 
         self.assertEqual(_escape_applescript("safe\x00text\x7f"), "safetext")
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestNeighParse(unittest.TestCase):
     def test_standard_order(self):
@@ -425,9 +422,6 @@ class TestServiceScanStrictArgumentValidation(unittest.TestCase):
             scan_services(["192.168.1.10"], ports={True: "invalid"})
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestHtmlHistoryRendering(unittest.TestCase):
     def test_history_changes_are_rendered_and_escaped(self):
@@ -454,9 +448,6 @@ class TestHtmlHistoryRendering(unittest.TestCase):
         self.assertNotIn("<script>alert(1)</script>", rendered)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestRiskSummaryOrdering(unittest.TestCase):
     def test_equal_severity_findings_are_sorted_by_ip_and_port(self):
@@ -474,6 +465,131 @@ class TestRiskSummaryOrdering(unittest.TestCase):
                 "192.168.1.20 exposes Telnet on port 23",
             ],
         )
+
+
+class TestDhcpUnknownGateway(unittest.TestCase):
+    def test_missing_gateway_does_not_report_rogue_dhcp(self):
+        from unittest.mock import patch
+        import sentinelwifi.dhcp as dhcp
+
+        with patch.object(dhcp, "dhcp_servers",
+                          return_value={"192.168.1.66"}):
+            info = dhcp.audit_dhcp("")
+
+        self.assertFalse(info.rogue)
+        self.assertIn("gateway could not be determined", info.detail)
+
+
+class TestArpScanScapyFailure(unittest.TestCase):
+    def test_permission_error_degrades_to_neighbour_table(self):
+        import sys
+        import types
+        from unittest.mock import patch
+        from sentinelwifi import lan_scan
+
+        class Packet:
+            def __truediv__(self, other):
+                return self
+
+        fake = types.ModuleType("scapy.all")
+        fake.Ether = lambda **kwargs: Packet()
+        fake.ARP = lambda **kwargs: Packet()
+        fake.srp = lambda *args, **kwargs: (_ for _ in ()).throw(
+            PermissionError("Operation not permitted"))
+        fake_parent = types.ModuleType("scapy")
+        fake_parent.__path__ = []
+
+        with patch.dict(sys.modules, {"scapy": fake_parent,
+                                      "scapy.all": fake}), \
+             patch.object(lan_scan, "local_network_info",
+                          return_value=("192.168.1.9", "192.168.1.1", "eth0")), \
+             patch.object(lan_scan, "self_mac",
+                          return_value="11:22:33:44:55:66"), \
+             patch.object(lan_scan.socket, "create_connection",
+                          side_effect=OSError("refused")), \
+             patch.object(lan_scan.subprocess, "run",
+                          return_value=types.SimpleNamespace(stdout="",
+                                                             returncode=0)), \
+             patch.object(lan_scan.time, "sleep"):
+            devices = lan_scan.arp_scan("192.168.1.0/24")
+
+        self.assertEqual(devices, [])
+
+
+class TestWindowsAdapterDetection(unittest.TestCase):
+    def test_ipconfig_output_is_parsed(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from sentinelwifi import iface
+
+        output = """
+Windows IP Configuration
+
+Wireless LAN adapter Wi-Fi:
+
+   Physical Address. . . . . . . . . : AA-BB-CC-DD-EE-FF
+   IPv4 Address. . . . . . . . . . . : 192.168.1.9(Preferred)
+   Default Gateway . . . . . . . . . : 192.168.1.1
+
+Ethernet adapter Ethernet:
+
+   Physical Address. . . . . . . . . : 11-22-33-44-55-66
+"""
+        with patch.object(iface.subprocess, "run",
+                          return_value=SimpleNamespace(returncode=0,
+                                                       stdout=output)):
+            adapters = iface._detect_adapters_windows()
+
+        self.assertEqual(len(adapters), 2)
+        wifi, ethernet = adapters
+        self.assertEqual(wifi.name, "Wi-Fi")
+        self.assertTrue(wifi.wireless)
+        self.assertEqual(wifi.mac, "AA:BB:CC:DD:EE:FF")
+        self.assertEqual(wifi.ip, "192.168.1.9")
+        self.assertEqual(ethernet.name, "Ethernet")
+        self.assertFalse(ethernet.wireless)
+
+
+class TestGlobalFlagsBeforeSubcommand(unittest.TestCase):
+    def test_json_flag_before_subcommand_is_honored(self):
+        import contextlib
+        import io
+        import json
+        import sentinel
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            exit_code = sentinel.main(["--json", "demo"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("score", json.loads(buffer.getvalue()))
+
+    def test_html_flag_before_subcommand_writes_report(self):
+        import contextlib
+        import io
+        import sentinel
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "report.html")
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = sentinel.main(["--html", path, "demo"])
+            with open(path, encoding="utf-8") as stream:
+                rendered = stream.read()
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("SentinelWiFi", rendered)
+
+    def test_quiet_flag_before_subcommand_is_honored(self):
+        import contextlib
+        import io
+        import sentinel
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            exit_code = sentinel.main(["--quiet", "demo"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("PLATFORM NOTES", buffer.getvalue())
 
 
 if __name__ == "__main__":

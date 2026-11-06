@@ -18,6 +18,70 @@ from dataclasses import dataclass, field
 from .iface import AdapterInfo
 
 SCAN_WINDOW_SECONDS = 30
+_ESCAPE = chr(92)          # nmcli escapes values with a backslash
+_MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}$")
+# Fallback for nmcli output that does not escape ':' inside field values.
+_NMCLI_AP_RE = re.compile(
+    r"(?P<ssid>.*):(?P<bssid>[0-9A-Fa-f:]{17}):"
+    r"(?P<chan>[0-9]+):(?P<sig>[0-9]+):(?P<sec>.*)$")
+
+
+def _split_nmcli(line: str) -> list[str]:
+    """Split one nmcli terse (-t) line into its fields.
+
+    nmcli escapes a literal colon inside a value with a backslash, so a
+    plain str.split(":") mangles SSIDs and BSSIDs.
+    """
+    fields: list[str] = []
+    buf: list[str] = []
+    escaped = False
+    for ch in line:
+        if escaped:
+            buf.append(ch)
+            escaped = False
+        elif ch == _ESCAPE:
+            escaped = True
+        elif ch == ":":
+            fields.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    if escaped:
+        buf.append(_ESCAPE)
+    fields.append("".join(buf))
+    return fields
+
+
+def _is_mac(value: str) -> bool:
+    return bool(_MAC_RE.match(value))
+
+
+def _percent_to_dbm(pct: int) -> int:
+    """Map nmcli's 0-100 signal percentage to an approximate dBm value."""
+    pct = max(0, min(100, pct))
+    return min(-30, -30 - (100 - pct) // 2)
+
+
+def _parse_nmcli_ap(line: str) -> tuple[str, str, int, int, str] | None:
+    """Parse SSID,BSSID,CHAN,SIGNAL,SECURITY from an nmcli terse line."""
+    fields = _split_nmcli(line)
+    if len(fields) == 5:
+        ssid, bssid, chan, sig, sec = fields
+    else:
+        match = _NMCLI_AP_RE.match(line)
+        if not match:
+            return None
+        ssid = match.group("ssid").replace(_ESCAPE + ":", ":")
+        bssid = match.group("bssid")
+        chan, sig = match.group("chan"), match.group("sig")
+        sec = match.group("sec")
+    try:
+        channel, signal = int(chan), int(sig)
+    except ValueError:
+        return None
+    if not _is_mac(bssid):
+        return None
+    return ssid, bssid.upper(), channel, signal, sec
 
 
 @dataclass
@@ -83,27 +147,26 @@ def get_current_connection(adapter: AdapterInfo) -> dict:
     if shutil.which("nmcli"):
         try:
             out = subprocess.run(
-                ["nmcli", "-t", "-f", "ACTIVE,SSID,BSSID,CHAN,SIGNAL,SECURITY,CHAN_BW",
+                ["nmcli", "-t", "-f", "ACTIVE,SSID,BSSID,CHAN,SIGNAL,SECURITY",
                  "dev", "wifi", "list"],
                 capture_output=True, text=True, timeout=15)
             if out.returncode == 0:
                 for line in out.stdout.splitlines():
                     if not line.startswith("yes:"):
                         continue
-                    parts = line.split(":")
-                    # ACTIVE:SSID:BSSID:CHAN:SIGNAL:SECURITY (SSID may contain ':')
-                    rest = line[len("yes:"):]
-                    # SSID is everything before the last 4 colon fields
-                    m = re.match(r"(?P<ssid>.*):(?P<bssid>[0-9A-Fa-f:]{17}):(?P<chan>\d+):(?P<sig>\d+):(?P<sec>.*)$", rest)
-                    if m:
-                        info["ssid"] = m.group("ssid")
-                        info["bssid"] = m.group("bssid").upper()
-                        info["channel"] = int(m.group("chan"))
-                        # nmcli SIGNAL is 0-100 percentage; convert roughly to dBm
-                        pct = int(m.group("sig"))
-                        info["signal"] = min(-30, -30 - (100 - pct) // 2)
-                        info["encryption"] = _normalize_security(m.group("sec"))
-                        info["band"] = _band_for_channel(info["channel"])
+                    # ACTIVE:SSID:BSSID:CHAN:SIGNAL:SECURITY
+                    parsed = _parse_nmcli_ap(line[len("yes:"):])
+                    if parsed is None:
+                        continue
+                    ssid, bssid, channel, pct, sec = parsed
+                    info["ssid"] = ssid
+                    info["bssid"] = bssid
+                    info["channel"] = channel
+                    # nmcli SIGNAL is a 0-100 percentage, not dBm.
+                    info["signal"] = _percent_to_dbm(pct)
+                    info["encryption"] = _normalize_security(sec)
+                    info["band"] = _band_for_channel(channel)
+                    if ssid:
                         return info
         except Exception:
             pass
@@ -205,9 +268,16 @@ def _parse_iw_scan(text: str) -> list[AccessPoint]:
             cur["rsn"] = True
         elif s.startswith("WPS:"):
             cur["wps"] = True
-        elif s.startswith("* Capability:"):
+        elif s.startswith("* Capability:") or s.startswith("* Capabilities:"):
+            # iw prints this line in several shapes:
+            #   * Capability: 0x00c0
+            #   * Capabilities: 16-PTKSA-RC 1-GTKSA-RC (0x000c)
+            raw = s.split(":", 1)[1].strip()
+            hex_value = re.search(r"0x([0-9A-Fa-f]+)", raw)
+            token = (hex_value.group(1) if hex_value
+                     else raw.split()[0] if raw else "")
             try:
-                cur["rsncap"] = int(s.split(":", 1)[1].strip(), 16)
+                cur["rsncap"] = int(token, 16)
             except ValueError:
                 pass
         elif s.startswith("EHT capabilities") or s.startswith("EHT operation") \
@@ -342,7 +412,8 @@ def sniff_aps_monitor(ifname: str, seconds: int = SCAN_WINDOW_SECONDS) -> list[A
                     phy_bits["vht"] = True
                 elif elt.ID == 255 and elt.info[:1] == b"#":  # ext 35 HE -> WiFi 6
                     phy_bits["he"] = True
-                elif elt.ID == 48:
+                if elt.ID == 48 and elt.info and len(elt.info) >= 2:
+                    # Last two bytes of the RSN IE are the capability flags.
                     rsncap = int.from_bytes(bytes(elt.info)[-2:], "little")
                 elt = elt.payload.getlayer(Dot11Elt) if elt.payload.haslayer(Dot11Elt) else None
         # Privacy bit in capability field => at least WEP-era encryption
@@ -351,7 +422,12 @@ def sniff_aps_monitor(ifname: str, seconds: int = SCAN_WINDOW_SECONDS) -> list[A
             encryption = "Open"
         if (cap & 0x0010) and encryption == "Open":
             encryption = "WEP"  # privacy bit set but no WPA/RSN IEs
-        signal = int(pkt.dBm_AntNoise) if hasattr(pkt, "dBm_AntNoise") else 0
+        signal = 0
+        if hasattr(pkt, "dBm_AntSignal"):
+            try:
+                signal = int(pkt.dBm_AntSignal)
+            except (TypeError, ValueError):
+                signal = 0
         pmf = ""
         if rsncap is not None:
             pmf = ("required" if rsncap & 0x0040
@@ -388,19 +464,16 @@ def managed_mode_scan(iface: str = "") -> list[AccessPoint]:
                 capture_output=True, text=True, timeout=30)
             if out.returncode == 0:
                 for line in out.stdout.splitlines():
-                    m = re.match(
-                        r"(?P<ssid>.*):(?P<bssid>[0-9A-Fa-f:]{17}):(?P<chan>\d+):(?P<sig>\d+):(?P<sec>.*)$",
-                        line)
-                    if not m:
+                    parsed = _parse_nmcli_ap(line)
+                    if parsed is None:
                         continue
-                    chan = int(m.group("chan"))
-                    pct = int(m.group("sig"))
+                    ssid, bssid, chan, pct, sec = parsed
                     aps.append(AccessPoint(
-                        ssid=m.group("ssid") or "(hidden)",
-                        bssid=m.group("bssid").upper(),
+                        ssid=ssid or "(hidden)",
+                        bssid=bssid,
                         channel=chan,
-                        signal=min(-30, -30 - (100 - pct) // 2),
-                        encryption=_normalize_security(m.group("sec")),
+                        signal=_percent_to_dbm(pct),
+                        encryption=_normalize_security(sec),
                         band=_band_for_channel(chan),
                     ))
                 if aps:
@@ -447,14 +520,24 @@ def analyze_environment(aps: list[AccessPoint], current: dict,
             continue  # hidden SSIDs can't be meaningfully twin-checked
         bssids = {a.bssid for a in group} - set(trusted)
         if len(bssids) >= 2:
-            tag = "YOUR network" if ssid == my_ssid else f"SSID '{ssid}'"
-            findings.append(RogueFinding(
-                kind="evil_twin",
-                severity="high",
-                message=(f"SSID '{ssid}' is being broadcast by {len(bssids)} different "
-                         f"access points ({', '.join(sorted(bssids)[:4])}). If this is "
-                         f"{tag}, one of them may be an evil twin — verify which "
-                         f"BSSID is your real router (check the sticker on it).")))
+            listed = ", ".join(sorted(bssids)[:4])
+            # Only a duplicate of the network you are on is a warning about
+            # your own security; a neighbour's mesh is informational.
+            is_mine = bool(my_ssid) and ssid == my_ssid
+            if is_mine:
+                message = (f"SSID '{ssid}' is being broadcast by "
+                           f"{len(bssids)} different access points ({listed}). "
+                           "If this is YOUR network, one of them may be an "
+                           "evil twin — verify which BSSID is your real "
+                           "router (check the sticker on it).")
+            else:
+                message = (f"SSID '{ssid}' is broadcast by {len(bssids)} "
+                           f"different access points ({listed}). Usually a "
+                           "neighbour's mesh network; it only matters if that "
+                           "name is one you trust.")
+            findings.append(RogueFinding(kind="evil_twin",
+                                         severity="high" if is_mine else "info",
+                                         message=message))
 
     # Same SSID on unexpected channels
     if my_ssid and my_ssid in by_ssid:

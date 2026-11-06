@@ -35,8 +35,12 @@ class ScoreResult:
 # ---------------------------------------------------------------------------
 
 def check_wifi_encryption(encryption: str) -> Finding | None:
-    enc = (encryption or "").upper()
-    if enc in ("OPEN", ""):
+    enc = (encryption or "").strip().upper()
+    if enc in ("", "UNKNOWN"):
+        # Security mode unknown (no wireless link or unreadable driver
+        # data) — do not invent a critical "no password" finding.
+        return None
+    if enc == "OPEN":
         return Finding(
             id="wifi-open",
             severity="critical",
@@ -137,7 +141,6 @@ def check_unknown_devices(new_devices: int) -> Finding | None:
 def check_congestion(finding_msg: str | None, ap_count_on_channel: int) -> Finding | None:
     if finding_msg is None:
         return None
-    sev = "warning" if "Total co-channel" in finding_msg else "info"
     return Finding(
         id="congestion",
         severity="warning" if ap_count_on_channel >= 6 else "info",
@@ -201,9 +204,16 @@ def check_dhcp(dhcp_info) -> "Finding | None":
     if dhcp_info is None or not getattr(dhcp_info, "servers", None):
         return None
     if not dhcp_info.rogue:
+        gateway = getattr(dhcp_info, "gateway", "")
         return Finding(
-            id="dhcp-ok", severity="info", title="DHCP server looks normal",
-            explanation=dhcp_info.detail, fix="No action needed.", penalty=0)
+            id="dhcp-ok" if gateway else "dhcp-unknown", severity="info",
+            title=("DHCP server looks normal" if gateway
+                   else "DHCP server recorded (gateway unknown)"),
+            explanation=dhcp_info.detail,
+            fix=("No action needed." if gateway else
+                 "No action needed; re-run on a network with a detectable "
+                 "default gateway to compare the DHCP server against it."),
+            penalty=0)
     return Finding(
         id="dhcp-rogue", severity="critical",
         title="Unknown DHCP server on your network",

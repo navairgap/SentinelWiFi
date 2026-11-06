@@ -12,8 +12,9 @@ Commands:
     selftest  verify the install/environment and show what's missing
     demo      render a report from synthetic data (no network needed)
 
-Global flags: --json, --iface, --html FILE, --no-ports, --notify, --window,
---timeout, --interval. Persistent config lives in ~/.sentinelwifi/config.json.
+Common flags (before or after the subcommand): --json, --iface, --html FILE,
+--quiet. Per-command: --window, --timeout, --interval, --no-ports, --notify,
+--csv. Persistent config lives in ~/.sentinelwifi/config.json.
 """
 
 from __future__ import annotations
@@ -68,7 +69,8 @@ def _gather_wireless(adapter, window: int, cfg):
             used_monitor = True
         except RuntimeError as exc:
             limitations.append(str(exc))
-    if not aps and not used_monitor and adapter.monitor_capable:
+    if (not aps and not used_monitor and adapter.wireless
+            and adapter.monitor_capable):
         limitations.append("Monitor mode available but not active; attempting "
                            "to enable it for a passive sniffing window…")
         if try_enable_monitor(adapter.name):
@@ -106,14 +108,16 @@ def _build_findings(current, aps, rogue, devices, admin_proto, gateway,
               check_pmf(current.get("pmf", ""))):
         if f:
             findings.append(f)
-    etwin = next((r for r in rogue if r.kind == "evil_twin"), None)
+    etwin = next((r for r in rogue
+                  if r.kind == "evil_twin" and r.severity == "high"), None)
     if etwin:
         findings.append(check_evil_twin(etwin.message))
     cong = next((r for r in rogue if r.kind == "congestion"), None)
     if cong:
         on_ch = len([a for a in aps if a.channel == current.get("channel")])
         findings.append(check_congestion(cong.message, on_ch))
-    new_count = len([d for d in devices if d.is_new and not d.is_self])
+    new_count = len([d for d in devices if d.is_new and not d.is_self
+                     and not d.is_gateway])
     f = check_unknown_devices(new_count)
     if f:
         findings.append(f)
@@ -162,7 +166,8 @@ def cmd_scan(args, cfg) -> int:
               check_pmf(current.get("pmf", ""))):
         if f:
             findings.append(f)
-    etwin = next((r for r in rogue if r.kind == "evil_twin"), None)
+    etwin = next((r for r in rogue
+                  if r.kind == "evil_twin" and r.severity == "high"), None)
     if etwin:
         findings.append(check_evil_twin(etwin.message))
     cong = next((r for r in rogue if r.kind == "congestion"), None)
@@ -288,7 +293,7 @@ def cmd_report(args, cfg) -> int:
     limitations += lim2
 
     subnet = _subnet24(local_ip)
-    devices = lan_scan.arp_scan(subnet, timeout=8)
+    devices = lan_scan.arp_scan(subnet, timeout=args.timeout)
     lan_scan.mark_new_devices(devices)
     services = {}
     if not args.no_ports and cfg.get("port_scan_enabled", True):
@@ -327,7 +332,12 @@ def cmd_selftest(args, cfg) -> int:
                        "console will be plain text"))
     import shutil
     iw = shutil.which("iw")
-    checks.append(("`iw` present (Linux)", bool(iw), iw or "apt install iw"))
+    if sys.platform.startswith("win"):
+        checks.append(("`iw` (Linux wireless tools)", True,
+                       "not needed on Windows — uses netsh"))
+    else:
+        checks.append(("`iw` present (Linux)", bool(iw),
+                       iw or "apt install iw"))
     adapter = pick_default_adapter(prefer=cfg.get("preferred_iface", ""))
     checks.append(("network adapter detected", adapter is not None,
                    adapter.name if adapter else "none found"))
@@ -335,9 +345,15 @@ def cmd_selftest(args, cfg) -> int:
         checks.append(("wireless adapter", adapter.wireless,
                        adapter.name if adapter.wireless else
                        f"{adapter.name} is Ethernet-only (WiFi audits limited)"))
-    root = (hasattr(os, "geteuid") and os.geteuid() == 0)
-    checks.append(("root/Administrator", root,
-                   "ok" if root else "re-run with sudo for full sniffing/ARP"))
+    geteuid = getattr(os, "geteuid", None)
+    if callable(geteuid):
+        elevated = geteuid() == 0
+        checks.append(("root/Administrator", elevated,
+                       "ok" if elevated else
+                       "re-run with sudo for full sniffing/ARP"))
+    else:
+        checks.append(("root/Administrator", True,
+                       "run as Administrator for full ARP/sniffing results"))
     try:
         os.makedirs(lan_scan.DATA_DIR, exist_ok=True)
         probe = os.path.join(lan_scan.DATA_DIR, ".probe")
@@ -362,7 +378,7 @@ def cmd_selftest(args, cfg) -> int:
 
 def _demo_data() -> ReportData:
     """Synthetic but realistic data — renders without any network access."""
-    from sentinelwifi.ap_scan import AccessPoint, RogueFinding
+    from sentinelwifi.ap_scan import AccessPoint
     from sentinelwifi.dhcp import DhcpInfo
     from sentinelwifi.history import HistoryDiff
     from sentinelwifi.lan_scan import Device
@@ -412,7 +428,8 @@ def _demo_data() -> ReportData:
               check_new_aps(hist.new_aps, current["ssid"])):
         if f:
             findings.append(f)
-    etwin = next((r for r in rogue if r.kind == "evil_twin"), None)
+    etwin = next((r for r in rogue
+                  if r.kind == "evil_twin" and r.severity == "high"), None)
     if etwin:
         findings.append(check_evil_twin(etwin.message))
     cong = next((r for r in rogue if r.kind == "congestion"), None)
@@ -432,14 +449,7 @@ def _demo_data() -> ReportData:
 
 
 def cmd_demo(args, cfg) -> int:
-    data = _demo_data()
-    if getattr(args, "json", False):
-        print(report_to_json(data))
-    else:
-        print(report_to_console(data))
-    out = getattr(args, "html", "")
-    if out:
-        print(f"\nHTML report written to: {write_html_report(data, out)}")
+    _render(_demo_data(), args)
     return 0
 
 
@@ -461,17 +471,23 @@ def main(argv=None) -> int:
     p.add_argument("--iface", default="", help="force a network interface")
     p.add_argument("--html", metavar="FILE", default="",
                    help="also write an HTML report to FILE")
+    p.add_argument("--quiet", action="store_true",
+                   help="skip platform notes (script-friendly)")
     sub = p.add_subparsers(dest="command", required=True)
 
     # Shared flags so `sentinel.py --json scan` AND `sentinel.py scan --json`
-    # both work (subparser values override the top-level ones).
+    # both work. SUPPRESS stops the subparser from overwriting a flag that was
+    # already given before the subcommand (argparse would otherwise reset it
+    # to the subparser's default).
     parent = argparse.ArgumentParser(add_help=False)
     parent.add_argument("--json", action="store_true",
+                        default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    parent.add_argument("--html", metavar="FILE", default=argparse.SUPPRESS,
                         help=argparse.SUPPRESS)
-    parent.add_argument("--html", metavar="FILE", default=None,
+    parent.add_argument("--iface", default=argparse.SUPPRESS,
                         help=argparse.SUPPRESS)
-    parent.add_argument("--iface", default=None, help=argparse.SUPPRESS)
     parent.add_argument("--quiet", action="store_true",
+                        default=argparse.SUPPRESS,
                         help="skip platform notes (script-friendly)")
 
     def common(sp):

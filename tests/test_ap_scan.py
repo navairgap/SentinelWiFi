@@ -83,9 +83,6 @@ class TestUnexpectedChannel(unittest.TestCase):
         self.assertIn("unexpected_channel", kinds)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestParseIwScan(unittest.TestCase):
     SAMPLE = """
@@ -235,3 +232,63 @@ class TestSecurityNormalization(unittest.TestCase):
         for value, expected in cases.items():
             with self.subTest(value=value):
                 self.assertEqual(_normalize_security(value), expected)
+
+
+class TestIwCapabilitiesLine(unittest.TestCase):
+    def test_real_iw_capabilities_line_sets_pmf(self):
+        from sentinelwifi.ap_scan import _parse_iw_scan
+
+        sample = """
+BSS aa:bb:cc:dd:ee:ff(on wlan0)
+  freq: 2437
+  signal: -50.00 dBm
+  capability: ESS Privacy (0x0011)
+  SSID: Real
+  RSN:   * Version: 1
+         * Authentication suites: PSK
+         * Capabilities: 16-PTKSA-RC 1-GTKSA-RC (0x000c)
+"""
+        ap = _parse_iw_scan(sample)[0]
+        self.assertEqual(ap.pmf, "none")
+        self.assertEqual(ap.encryption, "WPA2")
+
+
+class TestEvilTwinScope(unittest.TestCase):
+    def test_neighbour_duplicate_is_informational(self):
+        aps = [_ap("Home", "AA:BB:CC:DD:EE:01", 6),
+               _ap("Neighbour", "BB:BB:CC:DD:EE:01", 1),
+               _ap("Neighbour", "BB:BB:CC:DD:EE:02", 6)]
+        cur = {"ssid": "Home", "bssid": "AA:BB:CC:DD:EE:01", "channel": 6}
+        twins = [r for r in analyze_environment(aps, cur)
+                 if r.kind == "evil_twin"]
+        self.assertEqual(len(twins), 1)
+        self.assertEqual(twins[0].severity, "info")
+
+
+class TestNmcliParsing(unittest.TestCase):
+    def test_escaped_colons_in_ssid_and_bssid(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from sentinelwifi.ap_scan import managed_mode_scan
+
+        esc = chr(92)
+        output = (f"Home{esc}:Lab:30{esc}:15{esc}:77{esc}:4F"
+                  f"{esc}:8E{esc}:73:36:62:WPA2")
+        with patch("sentinelwifi.ap_scan.shutil.which",
+                   side_effect=lambda name: "/usr/bin/nmcli"
+                   if name == "nmcli" else None):
+            with patch("sentinelwifi.ap_scan.subprocess.run",
+                       return_value=SimpleNamespace(returncode=0,
+                                                    stdout=output)):
+                aps = managed_mode_scan()
+
+        self.assertEqual(len(aps), 1)
+        self.assertEqual(aps[0].ssid, "Home:Lab")
+        self.assertEqual(aps[0].bssid, "30:15:77:4F:8E:73")
+        self.assertEqual(aps[0].channel, 36)
+        self.assertEqual(aps[0].band, "5")
+        self.assertEqual(aps[0].encryption, "WPA2")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -24,6 +24,7 @@ from .vendors import lookup_vendor
 
 DATA_DIR = os.path.expanduser("~/.sentinelwifi")
 KNOWN_DEVICES_FILE = os.path.join(DATA_DIR, "known_devices.json")
+_MAC_RE = re.compile(r"^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$")
 
 
 @dataclass
@@ -131,8 +132,9 @@ def arp_scan(subnet: str, timeout: int = 4) -> list[Device]:
             ip = rcv.psrc
             mac = str(rcv.hwsrc).upper()
             devices[ip] = Device(ip=ip, mac=mac, vendor=lookup_vendor(mac))
-    except ImportError:
-        # Fallback (no scapy): prime the kernel ARP table with a fast
+    except Exception:
+        # scapy missing, or present but raw sockets are denied (unprivileged
+        # run): fall back to the kernel neighbour table. Prime it with a fast
         # connect-sweep of our own subnet, then read it back. Refused and
         # timed-out connections both populate the neighbour cache.
         import sys as _sys
@@ -143,15 +145,17 @@ def arp_scan(subnet: str, timeout: int = 4) -> list[Device]:
                                      text=True, timeout=15)
                 for line in out.stdout.splitlines():
                     parts = line.split()
-                    if len(parts) >= 2:
-                        try:
-                            ip = parts[0]
-                            mac = parts[1].replace("-", ":").upper()
-                        except IndexError:
+                    if len(parts) < 2:
+                        continue
+                    ip, mac = parts[0], parts[1].replace("-", ":").upper()
+                    try:
+                        if ipaddress.ip_address(ip) not in network:
                             continue
-                        if ipaddress.ip_address(ip) in network and ":" in mac:
-                            devices[ip] = Device(ip=ip, mac=mac,
-                                                 vendor=lookup_vendor(mac))
+                    except ValueError:
+                        continue        # headers such as "Interface: ..."
+                    if _MAC_RE.fullmatch(mac):
+                        devices[ip] = Device(ip=ip, mac=mac,
+                                             vendor=lookup_vendor(mac))
             except Exception:
                 pass
         else:

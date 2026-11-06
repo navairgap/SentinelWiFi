@@ -221,7 +221,7 @@ network's normal baseline.
 ## Development
 
 ```bash
-python -m unittest discover -s tests   # 34 tests, no network required
+python -m unittest discover -s tests   # 88 tests, no network required
 ```
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). The two CI

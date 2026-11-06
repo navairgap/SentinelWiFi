@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+Audit fixes (still passive and local-only):
+
+- Global flags given before a subcommand (`sentinel.py --json report`,
+  `--html FILE demo`, `--iface NAME scan`) are no longer overwritten by
+  the subparser defaults.
+- `nmcli` parsing: the invalid `CHAN_BW` field made the whole query fail
+  on current nmcli, and terse-mode `\:` escaping broke SSID/BSSID
+  parsing. Both are fixed.
+- `iw scan` RSN capabilities are read from the real `* Capabilities:`
+  line, so PMF (802.11w) is detected. Monitor-mode beacons now take
+  signal strength from `dBm_AntSignal` and read RSN capabilities from
+  the IE (the old duplicate branch was unreachable).
+- A neighbour's mesh network no longer scores as a critical evil twin
+  on your network; only duplicates of your own SSID are critical.
+- Unknown/absent WiFi security is no longer graded as an open network
+  (a missing adapter used to cost 45 points).
+- Rogue DHCP is not reported when the default gateway is unknown, and
+  the macOS lease-file path is now actually read.
+- ARP scan falls back to the neighbour table when scapy is installed but
+  raw sockets are denied (unprivileged run); Windows `arp -a` parsing no
+  longer aborts on its header line.
+- Windows adapter discovery via `ipconfig`; the package no longer fails
+  to import on Windows (`fcntl` is Unix-only).
+- Duplicate vendor prefixes removed (the later entry silently won).
+- CI: `sentinelwifi/test_config_env.py` now carries the required header,
+  so the passive-only audit step passes.
+
 ## v2.2.0
 
 Unique-value detection pass, all passive:

@@ -9,7 +9,6 @@ command). No packets are ever transmitted and no frames leave the adapter.
 
 from __future__ import annotations
 
-import fcntl
 import os
 import shutil
 import socket
@@ -17,6 +16,11 @@ import struct
 import subprocess
 import sys
 from dataclasses import dataclass, field
+
+try:  # Unix only: Windows has neither fcntl nor /sys/class/net.
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
 
 SIOCGIFADDR = 0x8915      # get IPv4 address of an interface
 SIOCGIFHWADDR = 0x8927    # get MAC address of an interface
@@ -35,6 +39,8 @@ class AdapterInfo:
 
 
 def _ioctl_bytes(ifname: str, request: int, length: int = 40) -> bytes:
+    if fcntl is None:
+        raise OSError("interface ioctls are not available on this platform")
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         ifreq = struct.pack("256s", ifname.encode()[:15])
@@ -82,6 +88,8 @@ def is_wireless(ifname: str) -> bool:
 
 def detect_adapters() -> list[AdapterInfo]:
     """Enumerate network interfaces (skips loopback and virtual bridges)."""
+    if os.name == "nt":
+        return _detect_adapters_windows()
     adapters: list[AdapterInfo] = []
     try:
         names = sorted(os.listdir("/sys/class/net"))
@@ -101,6 +109,42 @@ def detect_adapters() -> list[AdapterInfo]:
             ip=get_ipv4(name) if up else "",
             wireless=is_wireless(name),
         ))
+    return adapters
+
+
+def _detect_adapters_windows() -> list[AdapterInfo]:
+    """Enumerate adapters from `ipconfig` (Windows has no /sys/class/net)."""
+    try:
+        out = subprocess.run(["ipconfig"], capture_output=True, text=True,
+                             timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    adapters: list[AdapterInfo] = []
+    current: AdapterInfo | None = None
+    for raw in out.stdout.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.endswith(":") and "adapter" in line.lower():
+            if current is not None:
+                adapters.append(current)
+            name = line.rsplit("adapter", 1)[1].strip().rstrip(":").strip()
+            current = AdapterInfo(
+                name=name or "ethernet",
+                wireless=("wi-fi" in line.lower()
+                          or "wireless" in line.lower()),
+            )
+            continue
+        if current is None or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key_l, value = key.strip().lower(), value.strip()
+        if key_l.startswith("physical address"):
+            current.mac = value.replace("-", ":").upper() or "unknown"
+        elif key_l.startswith("ipv4 address"):
+            current.ip = value.split("(", 1)[0].strip()
+    if current is not None:
+        adapters.append(current)
     return adapters
 
 
@@ -140,7 +184,7 @@ def check_monitor_capability(ifname: str) -> AdapterInfo:
             out = subprocess.run(["iw", "list"], capture_output=True,
                                  text=True, timeout=10)
             if out.returncode == 0 and "monitor" in out.stdout:
-                info.monitor_capable = True
+                info.monitor_capable = info.wireless
             elif out.returncode != 0:
                 info.monitor_notes.append("`iw list` failed; monitor-mode "
                                           "status unknown.")
@@ -207,12 +251,13 @@ def platform_notes() -> list[str]:
     notes = []
     if sys.platform.startswith("win"):
         notes.append("Windows: monitor mode is not supported — AP scanning is "
-                     "limited to netsh-visible networks. Vendor lookup and "
+                     "limited to what `netsh wlan` reports. Vendor lookup and "
                      "ARP inventory work normally.")
-    if not shutil.which("iw"):
+    elif not shutil.which("iw"):
         notes.append("`iw` (wireless tools) not found — full channel scanning "
                      "requires it. Try: sudo apt install iw")
-    if os.geteuid() != 0 if hasattr(os, "geteuid") else False:
+    geteuid = getattr(os, "geteuid", None)
+    if callable(geteuid) and geteuid() != 0:
         notes.append("Not running as root: sniffing and ARP scanning may be "
                      "limited. Re-run with sudo for complete results.")
     return notes

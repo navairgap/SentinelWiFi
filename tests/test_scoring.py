@@ -28,6 +28,10 @@ class TestEncryption(unittest.TestCase):
     def test_wpa3_no_finding(self):
         self.assertIsNone(check_wifi_encryption("WPA3"))
 
+    def test_unknown_security_is_not_graded_as_open(self):
+        self.assertIsNone(check_wifi_encryption(""))
+        self.assertIsNone(check_wifi_encryption("unknown"))
+
 
 class TestAdminAndSsid(unittest.TestCase):
     def test_http_admin_15(self):
@@ -64,6 +68,13 @@ class TestDevicesAndDhcp(unittest.TestCase):
 
     def test_no_dhcp_data_no_finding(self):
         self.assertIsNone(check_dhcp(DhcpInfo()))
+
+    def test_dhcp_without_gateway_is_informational(self):
+        info = DhcpInfo(servers=["192.168.1.66"], gateway="", rogue=False,
+                        detail="gateway unknown")
+        finding = check_dhcp(info)
+        self.assertEqual(finding.severity, "info")
+        self.assertEqual(finding.penalty, 0)
 
 
 class TestServicesAndAps(unittest.TestCase):

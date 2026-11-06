@@ -1,3 +1,8 @@
+"""Notification-override tests for the local configuration loader.
+
+For auditing networks you own or are authorized to test.
+"""
+
 import json
 import os
 import tempfile

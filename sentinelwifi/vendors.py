@@ -24,7 +24,7 @@ OUI_MAP = {
     "F484FC": "Google", "F8DAE5": "Google", "D83BBF": "Nest Labs",
     # Microsoft
     "000D3A": "Microsoft", "0022C8": "Microsoft", "04F3EE": "Microsoft",
-    "28CD1C": "Microsoft", "B0CA68": "Microsoft", "C4346B": "Microsoft",
+    "28CD1C": "Microsoft", "B0CA68": "Microsoft",
     "C83F26": "Microsoft", "F02F74": "Microsoft", "F44637": "Microsoft",
     # Samsung
     "0007AB": "Samsung", "000EE6": "Samsung", "0012FB": "Samsung",
@@ -35,7 +35,7 @@ OUI_MAP = {
     "8CEA48": "Samsung", "B09928": "Samsung", "E4B021": "Samsung",
     "F4E5F2": "Samsung", "F85AD8": "Samsung",
     # Sony
-    "00131D": "Sony", "001BEA": "Sony", "0024BE": "Sony",
+    "00131D": "Sony", "001BEA": "Sony",
     "30F7C5": "Sony", "4C15E6": "Sony", "702687": "Sony",
     "A8B8E0": "Sony", "E0B5B1": "Sony", "F834C0": "Sony",
     # LG
@@ -44,10 +44,10 @@ OUI_MAP = {
     "98D67B": "LG", "D4E892": "LG", "E80214": "LG",
     # Xiaomi
     "14F65A": "Xiaomi", "3C9BC0": "Xiaomi", "44C34A": "Xiaomi",
-    "58B961": "Xiaomi", "64A2F9": "Xiaomi", "74ACB9": "Xiaomi",
+    "58B961": "Xiaomi", "64A2F9": "Xiaomi",
     "782C29": "Xiaomi", "9CE33F": "Xiaomi", "F8A45F": "Xiaomi",
     # Huawei
-    "000C6E": "Huawei", "00464B": "Huawei", "2816A8": "Huawei",
+    "00464B": "Huawei", "2816A8": "Huawei",
     "3CF808": "Huawei", "54DF60": "Huawei", "983B16": "Huawei",
     "AC853D": "Huawei", "C46AB7": "Huawei", "E8CD2D": "Huawei",
     # Cisco

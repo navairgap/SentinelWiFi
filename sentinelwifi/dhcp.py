@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
 LEASE_DIRS = ("/var/lib/NetworkManager", "/var/lib/dhcp", "/var/lib/dhclient",
@@ -33,19 +34,28 @@ def parse_leases_text(text: str) -> set[str]:
     return set(_LEASE_RE.findall(text))
 
 
-def dhcp_servers() -> set[str]:
-    servers: set[str] = set()
+def _lease_files() -> Iterator[str]:
+    """Yield lease files from the known locations (files or directories)."""
     for base in LEASE_DIRS:
+        if os.path.isfile(base):        # e.g. /var/db/dhclient.leases
+            yield base
+            continue
         if not os.path.isdir(base):
             continue
         for root, _dirs, files in os.walk(base):
             for fn in files:
                 if fn.endswith((".lease", ".leases")) or fn == "dhclient.leases":
-                    try:
-                        with open(os.path.join(root, fn), errors="replace") as f:
-                            servers |= parse_leases_text(f.read())
-                    except OSError:
-                        continue
+                    yield os.path.join(root, fn)
+
+
+def dhcp_servers() -> set[str]:
+    servers: set[str] = set()
+    for path in _lease_files():
+        try:
+            with open(path, errors="replace") as f:
+                servers |= parse_leases_text(f.read())
+        except OSError:
+            continue
     return servers
 
 
@@ -56,6 +66,11 @@ def audit_dhcp(gateway: str) -> DhcpInfo:
     if not servers:
         info.detail = ("No DHCP lease file found on this machine — cannot "
                        "verify which server assigned your settings.")
+        return info
+    if not gateway:
+        info.detail = ("DHCP server(s) recorded in local leases: "
+                       f"{', '.join(servers)}. Your gateway could not be "
+                       "determined, so the server was not compared against it.")
         return info
     unexpected = [s for s in servers if s != gateway]
     if unexpected:
